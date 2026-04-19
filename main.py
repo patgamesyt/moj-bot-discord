@@ -2,7 +2,6 @@ import discord
 from discord.ext import commands
 from discord.ui import Button, View
 import os
-import random
 
 # --- KONFIGURACJA ---
 intents = discord.Intents.default()
@@ -11,120 +10,87 @@ intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Baza danych w pamięci
-db = {}
-ustawienia = {
-    "kanal_powitan": None, 
-    "kanal_pozegnan": None, 
-    "kanal_logow": None
-}
+# Baza danych w pamięci (Resetuje się przy restarcie bota, chyba że użyjesz bazy danych)
+# Struktura: {guild_id: {"pl": "treść", "en": "treść"}}
+regulaminy_serwerow = {}
 
-@bot.event
-async def on_ready():
-    print(f'🚢 Zabawna Łódź gotowa! Zalogowano jako: {bot.user.name}')
+# --- WIDOK Z PRZYCISKAMI ---
 
-# --- SYSTEM TICKETÓW ---
+class RegulaminView(View):
+    def __init__(self, guild_id):
+        super().__init__(timeout=60)
+        self.guild_id = guild_id
 
-class ConfirmCloseView(View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    @discord.ui.button(label="🗑️ Usuń Ticket", style=discord.ButtonStyle.danger, custom_id="close_ticket")
-    async def close_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("⚓ Zamykanie ticketu...")
-        await interaction.channel.delete()
-
-class TicketView(View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    @discord.ui.button(label="📩 Otwórz Ticket", style=discord.ButtonStyle.primary, custom_id="open_ticket")
-    async def open_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
-        guild = interaction.guild
-        user = interaction.user
-        channel_name = f"ticket-{user.name}"
+    @discord.ui.button(label="Polski PL 🇵🇱", style=discord.ButtonStyle.primary)
+    async def pl_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        data = regulaminy_serwerow.get(self.guild_id, {})
+        tresc = data.get("pl")
         
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
-        }
-        
-        ticket_channel = await guild.create_text_channel(channel_name, overwrites=overwrites)
-        await interaction.response.send_message(f"✅ Otwarto ticket: {ticket_channel.mention}", ephemeral=True)
-        
-        embed = discord.Embed(
-            title="⚓ Ticket Otwarty",
-            description=f"Witaj {user.mention}! Opisz swój problem.\nAby zamknąć sprawę, kliknij przycisk poniżej.",
-            color=0x00ffcc
-        )
-        await ticket_channel.send(embed=embed, view=ConfirmCloseView())
+        if not tresc:
+            await interaction.response.send_message("❌ Błąd: Regulamin PL nie został jeszcze ustawiony na tym serwerze przez administratora.", ephemeral=True)
+        else:
+            embed = discord.Embed(title="📜 Regulamin Serwera", description=tresc, color=0xff0000)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
 
-# --- KOMENDY BOTA ---
+    @discord.ui.button(label="English EN 🇬🇧", style=discord.ButtonStyle.secondary)
+    async def en_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        data = regulaminy_serwerow.get(self.guild_id, {})
+        tresc = data.get("en")
+        
+        if not tresc:
+            await interaction.response.send_message("❌ Error: English Regulations have not been set on this server yet.", ephemeral=True)
+        else:
+            embed = discord.Embed(title="📜 Server Rules", description=tresc, color=0x0000ff)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+
+# --- KOMENDY ---
+
+@bot.command()
+async def regulamin(ctx):
+    # Usuwamy wiadomość użytkownika (!regulamin)
+    try:
+        await ctx.message.delete()
+    except:
+        pass # Jeśli bot nie ma uprawnień do usuwania wiadomości
+
+    view = RegulaminView(ctx.guild.id)
+    embed = discord.Embed(
+        title="⚓ Wybierz język regulaminu / Choose language",
+        description="Kliknij odpowiedni przycisk poniżej:\nClick the button below:",
+        color=0xbc13fe
+    )
+    # Bot wysyła wiadomość od siebie
+    await ctx.send(embed=embed, view=view)
+
+@bot.command(name="set-reg-pl")
+@commands.has_permissions(administrator=True)
+async def set_reg_pl(ctx, *, tresc):
+    gid = ctx.guild.id
+    if gid not in regulaminy_serwerow:
+        regulaminy_serwerow[gid] = {"pl": None, "en": None}
+    
+    regulaminy_serwerow[gid]["pl"] = tresc
+    await ctx.message.delete()
+    await ctx.send(f"✅ Polski regulamin został zapisany dla serwera **{ctx.guild.name}**!", delete_after=5)
+
+@bot.command(name="set-reg-en")
+@commands.has_permissions(administrator=True)
+async def set_reg_en(ctx, *, tresc):
+    gid = ctx.guild.id
+    if gid not in regulaminy_serwerow:
+        regulaminy_serwerow[gid] = {"pl": None, "en": None}
+    
+    regulaminy_serwerow[gid]["en"] = tresc
+    await ctx.message.delete()
+    await ctx.send(f"✅ English regulations saved for **{ctx.guild.name}**!", delete_after=5)
+
+# --- RESZTA SYSTEMU (TICKET I POMOC) ---
 
 @bot.command()
 async def pomoc(ctx):
-    embed = discord.Embed(
-        title="⚓ Pełna Lista Komend - Zabawna Łódź",
-        description="Oto wszystkie funkcje Twojego bota podzielone na kategorie:",
-        color=0xbc13fe
-    )
-    embed.add_field(name="🎟️ Support / Tickety", value="`!setup_tickets` - Tworzy panel zgłoszeń", inline=False)
-    embed.add_field(name="⚙️ Ustawienia Serwera", value="`!welcome` - Ustawia powitania\n`!goodbye` - Ustawia pożegnania\n`!logs` - Ustawia kanał logów\n`!regulamin` - Pokazuje zasady", inline=False)
-    embed.add_field(name="💰 Ekonomia", value="`!bal` - Stan konta\n`!praca` - Zarabianie monet\n`!daily` - Bonus co 24h", inline=False)
-    embed.add_field(name="🎲 Zabawa i Inne", value="`!moneta` - Orzeł czy reszka\n`!pirat` - Tekst pirata\n`!ping` - Opóźnienie bota\n`!ruletka` - Gra losowa\n`!strona` - Nasza strona WWW", inline=False)
-    embed.set_footer(text="🚢 Zabawna Łódź - Systemy automatyczne (logi, powitania) są aktywne!")
+    embed = discord.Embed(title="⚓ Panel Pomocy", color=0xbc13fe)
+    embed.add_field(name="📜 Regulamin", value="`!regulamin` - Pokazuje przyciski\n`!set-reg-pl [treść]` - Ustawia polski\n`!set-reg-en [treść]` - Ustawia angielski", inline=False)
     await ctx.send(embed=embed)
-
-@bot.command()
-async def setup_tickets(ctx):
-    embed = discord.Embed(title="📩 Pomoc i Wsparcie", description="Kliknij przycisk, aby otworzyć ticket.", color=0x00ffcc)
-    await ctx.send(embed=embed, view=TicketView())
-
-@bot.command()
-async def welcome(ctx):
-    ustawienia["kanal_powitan"] = ctx.channel.id
-    await ctx.send("✅ Kanał powitań ustawiony!")
-
-@bot.command()
-async def goodbye(ctx):
-    ustawienia["kanal_pozegnan"] = ctx.channel.id
-    await ctx.send("✅ Kanał pożegnań ustawiony!")
-
-@bot.command()
-async def logs(ctx):
-    ustawienia["kanal_logow"] = ctx.channel.id
-    await ctx.send("📡 Kanał logów ustawiony!")
-
-@bot.command()
-async def daily(ctx):
-    uid = str(ctx.author.id)
-    db[uid] = db.get(uid, 0) + 200
-    await ctx.send("🎁 Odebrałeś 200 monet!")
-
-@bot.command()
-async def ruletka(ctx):
-    wynik = random.choice(["Przeżyłeś! 🍀", "BUM! 💥"])
-    await ctx.send(wynik)
-
-# Reszta komend (skrócone dla przejrzystości, ale działające)
-@bot.command()
-async def moneta(ctx): await ctx.send(f"🪙 {random.choice(['Orzeł', 'Reszka'])}")
-@bot.command()
-async def pirat(ctx): await ctx.send(random.choice(["Ahoj!", "Arrr!"]))
-@bot.command()
-async def ping(ctx): await ctx.send(f"🏓 Pong: {round(bot.latency * 1000)}ms")
-@bot.command()
-async def regulamin(ctx): await ctx.send("📜 Bądź miły i nie spamuj!")
-@bot.command()
-async def strona(ctx): await ctx.send("🌐 funy-boat.carrd.co")
-@bot.command()
-async def bal(ctx): await ctx.send(f"💰 Masz: {db.get(str(ctx.author.id), 0)} monet")
-@bot.command()
-async def praca(ctx):
-    z = random.randint(10,50)
-    db[str(ctx.author.id)] = db.get(str(ctx.author.id), 0) + z
-    await ctx.send(f"⚓ Zarobiłeś {z} monet!")
 
 # --- START ---
 token = os.environ.get('DISCORD_TOKEN')
