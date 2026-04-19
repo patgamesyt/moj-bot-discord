@@ -17,7 +17,8 @@ serwery = {}
 
 def get_data(guild_id):
     if guild_id not in serwery:
-        serwery[guild_id] = {"welcome": None, "goodbye": None, "logs": None, "money": {}}
+        # Dodano "ignored_users" do bazy, aby system wiedział kogo pomijać
+        serwery[guild_id] = {"welcome": None, "goodbye": None, "logs": None, "money": {}, "ignored_users": []}
     return serwery[guild_id]
 
 @bot.event
@@ -88,7 +89,43 @@ class WebsiteView(discord.ui.View):
         super().__init__()
         self.add_item(discord.ui.Button(label="Otwórz Stronę WWW", url="https://funnyboat.carrd.co"))
 
-# --- 4. KOMENDY ADMINISTRACYJNE ---
+# --- 4. KOMENDY ADMINISTRACYJNE (ZMIENIONE !LOGS) ---
+
+class LogsView(View):
+    def __init__(self, channel_id):
+        super().__init__(timeout=60)
+        self.channel_id = channel_id
+
+    @discord.ui.button(label="Ignoruj osoby 👤+", style=discord.ButtonStyle.primary)
+    async def ignore_users(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("❌ Tylko dla admina!", ephemeral=True)
+        await interaction.response.send_message("👤 Oznacz teraz osoby (@użytkownik1 @użytkownik2...), które mam ignorować...", ephemeral=True)
+        
+        def check(m): return m.author == interaction.user and m.channel == interaction.channel
+        try:
+            msg = await bot.wait_for('message', check=check, timeout=60)
+            if msg.mentions:
+                data = get_data(interaction.guild.id)
+                data["logs"] = self.channel_id
+                dodani = []
+                for user in msg.mentions:
+                    if user.id not in data["ignored_users"]:
+                        data["ignored_users"].append(user.id)
+                        dodani.append(user.name)
+                await msg.delete()
+                await interaction.followup.send(f"✅ Ustawiono kanał logów i zignorowano: {', '.join(dodani)}", ephemeral=True)
+            else:
+                await interaction.followup.send("❌ Nie oznaczyłeś nikogo!", ephemeral=True)
+        except asyncio.TimeoutError:
+            await interaction.followup.send("⏰ Czas minął.", ephemeral=True)
+
+    @discord.ui.button(label="Pomiń / Loguj wszystkich 📄", style=discord.ButtonStyle.secondary)
+    async def log_all(self, interaction: discord.Interaction, button: discord.ui.Button):
+        data = get_data(interaction.guild.id)
+        data["logs"] = self.channel_id
+        data["ignored_users"] = [] 
+        await interaction.response.edit_message(content=f"📡 Kanał logów ustawiony! Loguję wszystkich bez wyjątków.", embed=None, view=None)
 
 @bot.command()
 async def welcome(ctx):
@@ -104,9 +141,8 @@ async def goodbye(ctx):
 
 @bot.command()
 async def logs(ctx):
-    data = get_data(ctx.guild.id)
-    data["logs"] = ctx.channel.id
-    await ctx.send(f"📡 Kanał logów został ustawiony!")
+    embed = discord.Embed(title="📡 Konfiguracja Logów", description="Wybierz, czy chcesz zignorować wybrane osoby, czy logować wszystkich.", color=0xbc13fe)
+    await ctx.send(embed=embed, view=LogsView(ctx.channel.id))
 
 @bot.command()
 async def regulamin(ctx):
@@ -165,7 +201,7 @@ async def ruletka(ctx): await ctx.send(random.choice(["💥 BOOM!", "🍀 Przeż
 @bot.command()
 async def ping(ctx): await ctx.send(f"🏓 Pong! `{round(bot.latency * 1000)}ms`")
 
-# --- 6. EVENTY (POWITANIA I LOGI) ---
+# --- 6. EVENTY (POWITANIA I LOGI - ZMIENIONE LOGI) ---
 
 @bot.event
 async def on_member_join(member):
@@ -190,9 +226,19 @@ async def on_member_remove(member):
 @bot.event
 async def on_message_delete(message):
     data = get_data(message.guild.id)
-    if data["logs"] and not message.author.bot:
+    # Sprawdza czy kanał logów jest ustawiony
+    if data.get("logs"):
+        # Sprawdza czy autor wiadomości jest na liście ignorowanych
+        if message.author.id in data.get("ignored_users", []):
+            return
+        
+        # Ignoruje boty domyślnie, aby nie było spamu (chyba że to bot którego oznaczysz)
+        if message.author.bot and message.author.id not in data.get("ignored_users", []):
+            return
+
         ch = bot.get_channel(data["logs"])
-        if ch: await ch.send(f"🗑️ **Usunięta wiadomość:** {message.author.name}: {message.content}")
+        if ch:
+            await ch.send(f"🗑️ **Usunięta wiadomość:** {message.author.name}: {message.content}")
 
 # --- URUCHOMIENIE ---
 token = os.environ.get('DISCORD_TOKEN')
