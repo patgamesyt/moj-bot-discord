@@ -1,47 +1,21 @@
 import discord
 from discord.ext import commands
 import os
-from flask import Flask
-from threading import Thread
-
-# --- SEKCJA UTRZYMYWANIA BOTA (DLA CRON-JOB) ---
-app = Flask('')
-
-@app.route('/')
-def home():
-    return "Funny Boat is Alive!"
-
-def run():
-    app.run(host='0.0.0.0', port=8080)
-
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
-
-# --- SEKCJA BOTA DISCORD ---
-intents = discord.Intents.default()
-intents.message_content = True
-bot = commands.Bot(command_prefix="!", intents=intents)import discord
-from discord.ext import commands
-import os
 import random
 
-# --- KONFIGURACJA ---
+# 1. Podstawowa konfiguracja
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
-
-# Baza danych w pamięci
-db = {}
+db = {} # Tymczasowy portfel bota
 
 @bot.event
 async def on_ready():
     print(f'🚢 Zabawna Łódź gotowa! Zalogowano jako: {bot.user.name}')
 
-# --- TWOJE KOMENDY ---
-
+# 2. Komendy bota
 @bot.command()
 async def pomoc(ctx):
     embed = discord.Embed(title="⚓ Panel Sterowania Zabawnej Łodzi", color=0xbc13fe)
@@ -60,24 +34,22 @@ async def pirat(ctx):
     await ctx.send(random.choice(teksty))
 
 @bot.command()
+async def ping(ctx):
+    await ctx.send(f"🏓 Pong! Opóźnienie: **{round(bot.latency * 1000)}ms**")
+
+@bot.command()
 async def bal(ctx):
     user_id = str(ctx.author.id)
     money = db.get(user_id, 0)
-    await ctx.send(f"💰 {ctx.author.name}, stan konta: {money} monet.")
-
-# --- START BOTA ---
-token = os.environ.get('DISCORD_TOKEN')
-bot.run(token)
-@bot.event
-async def on_ready():
-    print(f'Zalogowano jako {bot.user.name}')
+    await ctx.send(f"💰 {ctx.author.name}, Twój stan konta to: {money} monet.")
 
 @bot.command()
-async def ping(ctx):
-    await ctx.send('Pong!')
+async def praca(ctx):
+    user_id = str(ctx.author.id)
+    zarobek = random.randint(10, 50)
+    db[user_id] = db.get(user_id, 0) + zarobek
+    await ctx.send(f"⚓ Zarobiłeś `{zarobek}` monet!")
 
-# Odpalenie serwera i bota
-keep_alive()
-# Tutaj musisz wkleić swój TOKEN (patrz krok 3)
-import os
-bot.run(os.getenv('DISCORD_TOKEN'))
+# 3. Odpalanie bota
+token = os.environ.get('DISCORD_TOKEN')
+bot.run(token)
