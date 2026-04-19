@@ -34,7 +34,9 @@ class RegulaminView(View):
     async def pl_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ Tylko admin może to zrobić!", ephemeral=True)
+        
         await interaction.response.send_message("📝 Napisz teraz treść polskiego regulaminu na czacie...", ephemeral=True)
+        
         def check(m): return m.author == interaction.user and m.channel == interaction.channel
         try:
             msg = await bot.wait_for('message', check=check, timeout=300)
@@ -49,7 +51,9 @@ class RegulaminView(View):
     async def en_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ Only for Admin!", ephemeral=True)
+        
         await interaction.response.send_message("📝 Type the English regulations now...", ephemeral=True)
+        
         def check(m): return m.author == interaction.user and m.channel == interaction.channel
         try:
             msg = await bot.wait_for('message', check=check, timeout=300)
@@ -76,7 +80,12 @@ class TicketView(View):
         await ch.set_permissions(interaction.guild.default_role, read_messages=False)
         await ch.set_permissions(interaction.user, read_messages=True, send_messages=True)
         await interaction.response.send_message(f"✅ Created: {ch.mention}", ephemeral=True)
-        embed = discord.Embed(title="⚓ New Ticket", description="Describe your issue. Click the button below to close this ticket.", color=0x00ffcc)
+        
+        embed = discord.Embed(
+            title="⚓ New Ticket", 
+            description="Describe your issue. Click the button below to close this ticket.", 
+            color=0x00ffcc
+        )
         await ch.send(embed=embed, view=ConfirmCloseView())
 
 # --- 3. ADMIN COMMANDS ---
@@ -101,12 +110,17 @@ async def logs(ctx):
 
 @bot.command(name="rules")
 async def rules_cmd(ctx):
-    await ctx.message.delete()
-    await ctx.send(embed=discord.Embed(title="⚓ Regulation Panel", description="Select language / Wybierz język:", color=0xbc13fe), view=RegulaminView())
+    try:
+        await ctx.message.delete()
+    except:
+        pass
+    embed = discord.Embed(title="⚓ Regulation Panel", description="Select language / Wybierz język:", color=0xbc13fe)
+    await ctx.send(embed=embed, view=RegulaminView())
 
 @bot.command(name="setup_tickets")
 async def setup_tickets_cmd(ctx):
-    await ctx.send(embed=discord.Embed(title="📩 Support", description="Click the button below to open a ticket."), view=TicketView())
+    embed = discord.Embed(title="📩 Support", description="Click the button below to open a ticket.", color=0xbc13fe)
+    await ctx.send(embed=embed, view=TicketView())
 
 # --- 4. ECONOMY & FUN ---
 
