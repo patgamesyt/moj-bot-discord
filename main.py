@@ -5,14 +5,14 @@ import os
 import random
 import asyncio
 
-# --- CONFIGURATION ---
+# --- KONFIGURACJA ---
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True 
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Database in memory
+# Baza danych w pamięci
 serwery = {}
 
 def get_data(guild_id):
@@ -22,9 +22,9 @@ def get_data(guild_id):
 
 @bot.event
 async def on_ready():
-    print(f'🚢 Funny Boat is ready! Logged in as: {bot.user.name}')
+    print(f'🚢 Zabawna Łódź gotowa! Zalogowano jako: {bot.user.name}')
 
-# --- 1. RULES SYSTEM (MULTI-LANG) ---
+# --- 1. SYSTEM REGULAMINU (Z TWOIM MECHANIZMEM) ---
 
 class RegulaminView(View):
     def __init__(self):
@@ -34,9 +34,7 @@ class RegulaminView(View):
     async def pl_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ Tylko admin może to zrobić!", ephemeral=True)
-        
         await interaction.response.send_message("📝 Napisz teraz treść polskiego regulaminu na czacie...", ephemeral=True)
-        
         def check(m): return m.author == interaction.user and m.channel == interaction.channel
         try:
             msg = await bot.wait_for('message', check=check, timeout=300)
@@ -51,9 +49,7 @@ class RegulaminView(View):
     async def en_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ Only for Admin!", ephemeral=True)
-        
         await interaction.response.send_message("📝 Type the English regulations now...", ephemeral=True)
-        
         def check(m): return m.author == interaction.user and m.channel == interaction.channel
         try:
             msg = await bot.wait_for('message', check=check, timeout=300)
@@ -64,112 +60,79 @@ class RegulaminView(View):
         except asyncio.TimeoutError:
             await interaction.followup.send("⏰ Timeout.", ephemeral=True)
 
-# --- 2. TICKET SYSTEM ---
+# --- 2. SYSTEM TICKETÓW ---
 
 class ConfirmCloseView(View):
     def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="🗑️ Delete Ticket", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="🗑️ Usuń Ticket", style=discord.ButtonStyle.danger)
     async def close(self, interaction, button):
         await interaction.channel.delete()
 
 class TicketView(View):
     def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="📩 Open Ticket", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="📩 Otwórz Ticket", style=discord.ButtonStyle.success)
     async def open(self, interaction, button):
         ch = await interaction.guild.create_text_channel(f"ticket-{interaction.user.name}")
         await ch.set_permissions(interaction.guild.default_role, read_messages=False)
         await ch.set_permissions(interaction.user, read_messages=True, send_messages=True)
-        await interaction.response.send_message(f"✅ Created: {ch.mention}", ephemeral=True)
-        
-        embed = discord.Embed(
-            title="⚓ New Ticket", 
-            description="Describe your issue. Click the button below to close this ticket.", 
-            color=0x00ffcc
-        )
+        await interaction.response.send_message(f"✅ Otwarto: {ch.mention}", ephemeral=True)
+        embed = discord.Embed(title="⚓ Nowy Ticket", description="Opisz swój problem. Kliknij przycisk, aby usunąć kanał.", color=0x00ffcc)
         await ch.send(embed=embed, view=ConfirmCloseView())
 
-# --- 3. ADMIN COMMANDS ---
+# --- 3. KOMENDY ADMINISTRACYJNE ---
 
 @bot.command()
 async def welcome(ctx):
     data = get_data(ctx.guild.id)
     data["welcome"] = ctx.channel.id
-    await ctx.send(f"✅ Welcome channel set to {ctx.channel.mention}!")
+    await ctx.send(f"✅ Kanał powitań ustawiony na {ctx.channel.mention}!")
 
 @bot.command()
 async def goodbye(ctx):
     data = get_data(ctx.guild.id)
     data["goodbye"] = ctx.channel.id
-    await ctx.send(f"✅ Goodbye channel set to {ctx.channel.mention}!")
+    await ctx.send(f"✅ Kanał pożegnań ustawiony na {ctx.channel.mention}!")
 
 @bot.command()
 async def logs(ctx):
     data = get_data(ctx.guild.id)
     data["logs"] = ctx.channel.id
-    await ctx.send(f"📡 Logs channel set successfully!")
+    await ctx.send(f"📡 Kanał logów ustawiony!")
 
-@bot.command(name="rules")
-async def rules_cmd(ctx):
-    try:
-        await ctx.message.delete()
-    except:
-        pass
-    embed = discord.Embed(title="⚓ Regulation Panel", description="Select language / Wybierz język:", color=0xbc13fe)
-    await ctx.send(embed=embed, view=RegulaminView())
+@bot.command()
+async def regulamin(ctx):
+    await ctx.message.delete()
+    await ctx.send(embed=discord.Embed(title="⚓ Panel Regulaminu", description="Wybierz język:", color=0xbc13fe), view=RegulaminView())
 
-@bot.command(name="setup_tickets")
-async def setup_tickets_cmd(ctx):
-    embed = discord.Embed(title="📩 Support", description="Click the button below to open a ticket.", color=0xbc13fe)
-    await ctx.send(embed=embed, view=TicketView())
+@bot.command()
+async def setup_tickets(ctx):
+    await ctx.send(embed=discord.Embed(title="📩 Wsparcie", description="Kliknij przycisk poniżej, aby otworzyć ticket."), view=TicketView())
 
-# --- 4. ECONOMY & FUN ---
+# --- 4. EKONOMIA I ZABAWA ---
 
-@bot.command(name="help")
-async def help_cmd(ctx):
-    embed = discord.Embed(title="⚓ Funny Boat Command Panel", color=0xbc13fe)
-    embed.add_field(name="⚙️ Settings", value="`!welcome`, `!goodbye`, `!logs`, `!rules`, `!setup_tickets`", inline=False)
-    embed.add_field(name="💰 Economy", value="`!bal`, `!work`, `!daily` ", inline=False)
-    embed.add_field(name="🎲 Games", value="`!coin`, `!pirate`, `!ping`, `!roulette` ", inline=False)
-    embed.add_field(name="🌐 Others", value="`!website` ", inline=False)
+@bot.command()
+async def pomoc(ctx):
+    embed = discord.Embed(title="⚓ Wszystkie Komendy", color=0xbc13fe)
+    embed.add_field(name="⚙️ Ustawienia", value="`!welcome`, `!goodbye`, `!logs`, `!regulamin`, `!setup_tickets`", inline=False)
+    embed.add_field(name="💰 Ekonomia", value="`!bal`, `!praca`, `!daily` ", inline=False)
+    embed.add_field(name="🎲 Zabawa", value="`!moneta`, `!pirat`, `!ping`, `!ruletka` ", inline=False)
     await ctx.send(embed=embed)
 
-@bot.command(name="work")
-async def work_cmd(ctx):
+@bot.command()
+async def praca(ctx):
     z = random.randint(20, 100)
     data = get_data(ctx.guild.id)
     uid = str(ctx.author.id)
     data["money"][uid] = data["money"].get(uid, 0) + z
-    await ctx.send(f"⚓ You worked hard and earned `{z}` coins!")
+    await ctx.send(f"⚓ Zarobiłeś `{z}` monet!")
 
 @bot.command()
 async def bal(ctx):
     data = get_data(ctx.guild.id)
     m = data["money"].get(str(ctx.author.id), 0)
-    await ctx.send(f"💰 Balance: `{m}` coins.")
+    await ctx.send(f"💰 Stan konta: `{m}` monet.")
 
-@bot.command()
-async def daily(ctx):
-    data = get_data(ctx.guild.id)
-    uid = str(ctx.author.id)
-    data["money"][uid] = data["money"].get(uid, 0) + 200
-    await ctx.send("🎁 You claimed your 200 daily coins!")
-
-@bot.command(name="coin")
-async def coin_cmd(ctx): await ctx.send(f"🪙 Result: **{random.choice(['Heads', 'Tails'])}**")
-
-@bot.command()
-async def pirate(ctx): await ctx.send(random.choice(["Ahoj!", "Arrr!", "Fetch the rum!"]))
-
-@bot.command(name="roulette")
-async def roulette_cmd(ctx): await ctx.send(random.choice(["💥 BOOM!", "🍀 You survived!"]))
-
-@bot.command()
-async def ping(ctx): await ctx.send(f"🏓 Pong! `{round(bot.latency * 1000)}ms`")
-
-@bot.command(name="website")
-async def website_cmd(ctx): await ctx.send("🌐 **funy-boat.carrd.co**")
-
-# --- 5. EVENTS ---
+# --- 5. EVENTY (POWITANIA I POŻEGNANIA Z LOGO) ---
 
 @bot.event
 async def on_member_join(member):
@@ -177,7 +140,8 @@ async def on_member_join(member):
     if data["welcome"]:
         ch = bot.get_channel(data["welcome"])
         if ch:
-            embed = discord.Embed(title="Welcome on board!", description=f"⚓ Ahoj {member.mention}! Glad you joined us!", color=0x00ffcc)
+            embed = discord.Embed(title="Witaj na pokładzie!", description=f"⚓ Ahoj {member.mention}! Cieszymy się, że do nas dołączyłeś!", color=0x00ffcc)
+            # DODAWANIE LOGO (AWATARA)
             embed.set_thumbnail(url=member.display_avatar.url)
             await ch.send(embed=embed)
 
@@ -187,7 +151,8 @@ async def on_member_remove(member):
     if data["goodbye"]:
         ch = bot.get_channel(data["goodbye"])
         if ch:
-            embed = discord.Embed(title="Farewell!", description=f"🚢 **{member.name}** left the port. Good luck, pirate!", color=0xff4747)
+            embed = discord.Embed(title="Ktoś opuścił port...", description=f"🚢 **{member.name}** odpłynął w nieznane. Żegnaj piracie!", color=0xff4747)
+            # DODAWANIE LOGO (AWATARA)
             embed.set_thumbnail(url=member.display_avatar.url)
             await ch.send(embed=embed)
 
@@ -196,7 +161,7 @@ async def on_message_delete(message):
     data = get_data(message.guild.id)
     if data["logs"] and not message.author.bot:
         ch = bot.get_channel(data["logs"])
-        if ch: await ch.send(f"🗑️ **Deleted Message:** {message.author.name}: {message.content}")
+        if ch: await ch.send(f"🗑️ **Usunięto wiadomość:** {message.author.name}: {message.content}")
 
 # --- START ---
 token = os.environ.get('DISCORD_TOKEN')
