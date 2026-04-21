@@ -184,7 +184,20 @@ async def regulamin(ctx):
 async def setup_tickets(ctx):
     await ctx.send(embed=discord.Embed(title="📩 Wsparcie", description="Kliknij przycisk, aby otworzyć ticket."), view=TicketView())
 
-# --- 5. EKONOMIA I ZABAWA ---
+# --- 5. SYSTEM LFG (SZUKANIE EKIPY) ---
+
+@bot.command()
+async def lfg(ctx, *, gra_i_opis):
+    """Szuka graczy do wspólnej gry: !lfg Gra i wymagania"""
+    embed = discord.Embed(title="🎮 POSZUKIWANI GRACZE!", description=f"**Gra/Opis:** {gra_i_opis}", color=0x00ff00)
+    embed.add_field(name="Lider załogi", value=ctx.author.mention)
+    embed.set_thumbnail(url=ctx.author.display_avatar.url)
+    embed.set_footer(text="Kliknij ⚔️ pod tą wiadomością, aby dołączyć!")
+    
+    msg = await ctx.send(content="@here", embed=embed)
+    await msg.add_reaction("⚔️")
+
+# --- 6. EKONOMIA I ZABAWA ---
 
 class WebsiteView(discord.ui.View):
     def __init__(self):
@@ -195,6 +208,7 @@ class WebsiteView(discord.ui.View):
 async def pomoc(ctx):
     embed = discord.Embed(title="⚓ Panel Komend Funny Boat", color=0xbc13fe)
     embed.add_field(name="⚙️ Administracja", value="`!welcome`, `!goodbye`, `!logs`, `!regulamin`, `!setup_tickets`, `!clear`, `!ogloszenie`, `!sugestie` ", inline=False)
+    embed.add_field(name="🎮 Gaming", value="`!lfg` <opis>", inline=False)
     embed.add_field(name="💰 Ekonomia", value="`!bal`, `!praca`, `!daily` ", inline=False)
     embed.add_field(name="🎲 Zabawa & Inne", value="`!moneta`, `!pirat`, `!ping`, `!ruletka`, `!strona` ", inline=False)
     embed.set_footer(text="funnyboat.carrd.co")
@@ -233,24 +247,25 @@ async def ruletka(ctx): await ctx.send(random.choice(["💥 BOOM!", "🍀 Przeż
 @bot.command()
 async def ping(ctx): await ctx.send(f"🏓 Pong! `{round(bot.latency * 1000)}ms`")
 
-# --- 6. EVENTY ---
+# --- 7. EVENTY ---
 
 @bot.event
 async def on_message(message):
     if message.author.bot: return
     
     # Automatyczny system sugestii
-    data = get_data(message.guild.id)
-    if data["sugestie_channel"] == message.channel.id:
-        if not message.content.startswith('!'): # Ignoruj komendy admina na tym kanale
-            content = message.content
-            await message.delete()
-            embed = discord.Embed(title="💡 Nowa Sugestia", description=content, color=0xffd700)
-            embed.set_author(name=message.author.name, icon_url=message.author.display_avatar.url)
-            sug_msg = await message.channel.send(embed=embed)
-            await sug_msg.add_reaction("✅")
-            await sug_msg.add_reaction("❌")
-            return
+    if message.guild: # Dodatkowe zabezpieczenie dla wiadomości prywatnych
+        data = get_data(message.guild.id)
+        if data["sugestie_channel"] == message.channel.id:
+            if not message.content.startswith('!'): # Ignoruj komendy admina na tym kanale
+                content = message.content
+                await message.delete()
+                embed = discord.Embed(title="💡 Nowa Sugestia", description=content, color=0xffd700)
+                embed.set_author(name=message.author.name, icon_url=message.author.display_avatar.url)
+                sug_msg = await message.channel.send(embed=embed)
+                await sug_msg.add_reaction("✅")
+                await sug_msg.add_reaction("❌")
+                return
 
     await bot.process_commands(message)
 
@@ -274,6 +289,7 @@ async def on_member_remove(member):
 
 @bot.event
 async def on_message_delete(message):
+    if not message.guild: return
     data = get_data(message.guild.id)
     if data.get("logs"):
         if message.author.id in data.get("ignored_users", []): return
