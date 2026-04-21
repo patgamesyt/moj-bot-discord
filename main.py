@@ -4,6 +4,7 @@ from discord.ui import Button, View
 import os
 import random
 import asyncio
+import google.generativeai as genai  # Dodano import AI
 
 # --- KONFIGURACJA ---
 intents = discord.Intents.default()
@@ -11,6 +12,11 @@ intents.message_content = True
 intents.members = True 
 
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
+
+# Konfiguracja Gemini AI
+GEMINI_KEY = os.environ.get('GEMINI_KEY')
+genai.configure(api_key=GEMINI_KEY)
+ai_model = genai.GenerativeModel('gemini-1.5-flash')
 
 # Baza danych w pamięci
 serwery = {}
@@ -197,6 +203,7 @@ async def pomoc(ctx):
     embed.add_field(name="⚙️ Administracja", value="`!welcome`, `!goodbye`, `!logs`, `!regulamin`, `!setup_tickets`, `!clear`, `!ogloszenie`, `!sugestie` ", inline=False)
     embed.add_field(name="💰 Ekonomia", value="`!bal`, `!praca`, `!daily` ", inline=False)
     embed.add_field(name="🎲 Zabawa & Inne", value="`!moneta`, `!pirat`, `!ping`, `!ruletka`, `!strona` ", inline=False)
+    embed.add_field(name="🤖 Sztuczna Inteligencja", value="Oznacz bota (`@Funny Boat`), aby porozmawiać!", inline=False)
     embed.set_footer(text="funnyboat.carrd.co")
     await ctx.send(embed=embed)
 
@@ -239,10 +246,33 @@ async def ping(ctx): await ctx.send(f"🏓 Pong! `{round(bot.latency * 1000)}ms`
 async def on_message(message):
     if message.author.bot: return
     
-    # Automatyczny system sugestii
+    # --- NOWOŚĆ: SYSTEM AI (ROZMOWA) ---
+    if bot.user.mentioned_in(message):
+        content = message.content
+        for mention in message.mentions:
+            if mention.id == bot.user.id:
+                content = content.replace(mention.mention, "")
+        
+        pytanie = content.strip()
+
+        if not pytanie:
+            await message.reply("⚓ Ahoj! Jestem Funny Boat. O co chcesz zapytać?")
+            return
+
+        async with message.channel.typing():
+            try:
+                prompt = f"Jesteś mądrym i zabawnym piratem o imieniu Funny Boat. Odpowiedz krótko: {pytanie}"
+                response = ai_model.generate_content(prompt)
+                await message.reply(response.text[:2000])
+            except Exception as e:
+                print(f"Błąd AI: {e}")
+                await message.reply("🚢 Coś zatopiło moje myśli... spróbuj później!")
+        return # Kończymy, aby nie traktować tego jako sugestii lub komendy
+
+    # --- SYSTEM SUGESTII ---
     data = get_data(message.guild.id)
     if data["sugestie_channel"] == message.channel.id:
-        if not message.content.startswith('!'): # Ignoruj komendy admina na tym kanale
+        if not message.content.startswith('!'): 
             content = message.content
             await message.delete()
             embed = discord.Embed(title="💡 Nowa Sugestia", description=content, color=0xffd700)
