@@ -4,6 +4,7 @@ from discord.ui import Button, View
 import os
 import random
 import asyncio
+import aiohttp
 
 # --- KONFIGURACJA ---
 intents = discord.Intents.default()
@@ -208,9 +209,9 @@ class WebsiteView(discord.ui.View):
 async def pomoc(ctx):
     embed = discord.Embed(title="⚓ Panel Komend Funny Boat", color=0xbc13fe)
     embed.add_field(name="⚙️ Administracja", value="`!welcome`, `!goodbye`, `!logs`, `!regulamin`, `!setup_tickets`, `!clear`, `!ogloszenie`, `!sugestie` ", inline=False)
-    embed.add_field(name="🎮 Gaming", value="`!lfg` <opis>", inline=False)
+    embed.add_field(name="🎮 Gaming", value="`!lfg` <opis>, `!kalkulator` <działanie>", inline=False)
     embed.add_field(name="💰 Ekonomia", value="`!bal`, `!praca`, `!daily` ", inline=False)
-    embed.add_field(name="🎲 Zabawa & Inne", value="`!moneta`, `!pirat`, `!ping`, `!ruletka`, `!strona` ", inline=False)
+    embed.add_field(name="🎲 Zabawa & Inne", value="`!moneta`, `!pirat`, `!ping`, `!ruletka`, `!strona`, `!avatar` [@user], `!memy` ", inline=False)
     embed.set_footer(text="funnyboat.carrd.co")
     await ctx.send(embed=embed)
 
@@ -246,6 +247,37 @@ async def pirat(ctx): await ctx.send(random.choice(["Ahoj!", "Arrr!", "Podajcie 
 async def ruletka(ctx): await ctx.send(random.choice(["💥 BOOM!", "🍀 Przeżyłeś!"]))
 @bot.command()
 async def ping(ctx): await ctx.send(f"🏓 Pong! `{round(bot.latency * 1000)}ms`")
+
+# --- NOWE KOMENDY ---
+
+@bot.command()
+async def kalkulator(ctx, *, rownanie):
+    """Oblicza proste działania: !kalkulator 2+2*2"""
+    try:
+        # Bezpieczne obliczanie (tylko liczby i operatory)
+        wynik = eval(rownanie, {"__builtins__": None}, {})
+        await ctx.send(f"🧮 Wynik działania `{rownanie}` to: **{wynik}**")
+    except:
+        await ctx.send("❌ Błędne działanie! Używaj tylko liczb i znaków: +, -, *, /")
+
+@bot.command()
+async def avatar(ctx, member: discord.Member = None):
+    """Pokazuje avatar użytkownika: !avatar [@osoba]"""
+    member = member or ctx.author
+    embed = discord.Embed(title=f"🖼️ Avatar gracza {member.name}", color=0xbc13fe)
+    embed.set_image(url=member.display_avatar.url)
+    await ctx.send(embed=embed)
+
+@bot.command()
+async def memy(ctx):
+    """Wysyła losowy mem z Reddita"""
+    async with aiohttp.ClientSession() as session:
+        async with session.get("https://meme-api.com/gimme/wholesomememes") as response:
+            data = await response.json()
+            embed = discord.Embed(title=data['title'], color=0x00ffcc)
+            embed.set_image(url=data['url'])
+            embed.set_footer(text=f"Źródło: r/{data['subreddit']}")
+            await ctx.send(embed=embed)
 
 # --- 7. EVENTY ---
 
