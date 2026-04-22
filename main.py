@@ -254,7 +254,6 @@ async def ping(ctx): await ctx.send(f"🏓 Pong! `{round(bot.latency * 1000)}ms`
 async def kalkulator(ctx, *, rownanie):
     """Oblicza proste działania: !kalkulator 2+2*2"""
     try:
-        # Bezpieczne obliczanie (tylko liczby i operatory)
         wynik = eval(rownanie, {"__builtins__": None}, {})
         await ctx.send(f"🧮 Wynik działania `{rownanie}` to: **{wynik}**")
     except:
@@ -284,12 +283,10 @@ async def memy(ctx):
 @bot.event
 async def on_message(message):
     if message.author.bot: return
-    
-    # Automatyczny system sugestii
-    if message.guild: # Dodatkowe zabezpieczenie dla wiadomości prywatnych
+    if message.guild:
         data = get_data(message.guild.id)
         if data["sugestie_channel"] == message.channel.id:
-            if not message.content.startswith('!'): # Ignoruj komendy admina na tym kanale
+            if not message.content.startswith('!'):
                 content = message.content
                 await message.delete()
                 embed = discord.Embed(title="💡 Nowa Sugestia", description=content, color=0xffd700)
@@ -298,7 +295,6 @@ async def on_message(message):
                 await sug_msg.add_reaction("✅")
                 await sug_msg.add_reaction("❌")
                 return
-
     await bot.process_commands(message)
 
 @bot.event
@@ -307,7 +303,7 @@ async def on_member_join(member):
     if data["welcome"]:
         ch = bot.get_channel(data["welcome"])
         if ch:
-            embed = discord.Embed(title="Witaj!", description=f"⚓ Ahoj {member.mention}!", color=0x00ffcc)
+            embed = discord.Embed(title="Witaj na pokładzie! ⚓", description=f"Ahoj {member.mention}! Cieszymy się, że z nami jesteś.", color=0x00ffcc)
             embed.set_thumbnail(url=member.display_avatar.url)
             await ch.send(embed=embed)
 
@@ -317,7 +313,9 @@ async def on_member_remove(member):
     if data["goodbye"]:
         ch = bot.get_channel(data["goodbye"])
         if ch:
-            await ch.send(f"🚢 **{member.name}** opuścił naszą załogę.")
+            embed = discord.Embed(title="Pirat odpłynął... 🚢", description=f"**{member.name}** opuścił naszą załogę. Pomyślnych wiatrów!", color=0xff4500)
+            embed.set_thumbnail(url=member.display_avatar.url)
+            await ch.send(embed=embed)
 
 @bot.event
 async def on_message_delete(message):
