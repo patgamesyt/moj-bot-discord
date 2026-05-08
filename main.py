@@ -5,6 +5,9 @@ import os
 import random
 import asyncio
 import aiohttp
+import time
+import datetime
+import re
 
 # --- KONFIGURACJA ---
 intents = discord.Intents.default()
@@ -15,6 +18,8 @@ bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
 # Baza danych w pamięci
 serwery = {}
+# Przechowuje aktywne zadania konkursów, aby móc je anulować
+giveaway_tasks = {}
 
 def get_data(guild_id):
     if guild_id not in serwery:
@@ -22,9 +27,10 @@ def get_data(guild_id):
             "welcome": None, 
             "goodbye": None, 
             "logs": None, 
-            "sugestie_channel": None, # Przechowuje ID kanału sugestii
+            "sugestie_channel": None,
             "money": {}, 
-            "ignored_users": []
+            "ignored_users": [],
+            "active_giveaways": {} 
         }
     return serwery[guild_id]
 
@@ -130,10 +136,9 @@ class LogsView(View):
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def sugestie(ctx):
-    """Ustawia obecny kanał jako kanał automatycznych sugestii"""
     data = get_data(ctx.guild.id)
     data["sugestie_channel"] = ctx.channel.id
-    await ctx.send(f"✅ Ten kanał jest teraz **kanałem sugestii**. Każda napisana tu wiadomość zostanie zamieniona w sugestię!")
+    await ctx.send(f"✅ Ten kanał jest teraz **kanałem sugestii**.")
 
 @bot.command()
 @commands.has_permissions(manage_messages=True)
@@ -159,29 +164,34 @@ async def ogloszenie(ctx):
         await ctx.send("⏰ Czas na ogłoszenie minął.")
 
 @bot.command()
+@commands.has_permissions(administrator=True)
 async def welcome(ctx):
     data = get_data(ctx.guild.id)
     data["welcome"] = ctx.channel.id
     await ctx.send(f"✅ Kanał powitań: {ctx.channel.mention}")
 
 @bot.command()
+@commands.has_permissions(administrator=True)
 async def goodbye(ctx):
     data = get_data(ctx.guild.id)
     data["goodbye"] = ctx.channel.id
     await ctx.send(f"✅ Kanał pożegnań: {ctx.channel.mention}")
 
 @bot.command()
+@commands.has_permissions(administrator=True)
 async def logs(ctx):
     embed = discord.Embed(title="📡 Konfiguracja Logów", description="Wybierz opcję poniżej:", color=0xbc13fe)
     await ctx.send(embed=embed, view=LogsView(ctx.channel.id))
 
 @bot.command()
+@commands.has_permissions(administrator=True)
 async def regulamin(ctx):
     try: await ctx.message.delete()
     except: pass
     await ctx.send(embed=discord.Embed(title="⚓ Panel Regulaminu", description="Wybierz język poniżej:", color=0xbc13fe), view=RegulaminView())
 
 @bot.command()
+@commands.has_permissions(administrator=True)
 async def setup_tickets(ctx):
     await ctx.send(embed=discord.Embed(title="📩 Wsparcie", description="Kliknij przycisk, aby otworzyć ticket."), view=TicketView())
 
@@ -189,12 +199,10 @@ async def setup_tickets(ctx):
 
 @bot.command()
 async def lfg(ctx, *, gra_i_opis):
-    """Szuka graczy do wspólnej gry: !lfg Gra i wymagania"""
     embed = discord.Embed(title="🎮 POSZUKIWANI GRACZE!", description=f"**Gra/Opis:** {gra_i_opis}", color=0x00ff00)
     embed.add_field(name="Lider załogi", value=ctx.author.mention)
     embed.set_thumbnail(url=ctx.author.display_avatar.url)
     embed.set_footer(text="Kliknij ⚔️ pod tą wiadomością, aby dołączyć!")
-    
     msg = await ctx.send(content="@here", embed=embed)
     await msg.add_reaction("⚔️")
 
@@ -208,11 +216,10 @@ class WebsiteView(discord.ui.View):
 @bot.command()
 async def pomoc(ctx):
     embed = discord.Embed(title="⚓ Panel Komend Funny Boat", color=0xbc13fe)
-    embed.add_field(name="⚙️ Administracja", value="`!welcome`, `!goodbye`, `!logs`, `!regulamin`, `!setup_tickets`, `!clear`, `!ogloszenie`, `!sugestie` ", inline=False)
-    embed.add_field(name="🎮 Gaming", value="`!lfg` <opis>, `!kalkulator` <działanie>", inline=False)
+    embed.add_field(name="⚙️ Administracja", value="`!welcome`, `!goodbye`, `!logs`, `!regulamin`, `!setup_tickets`, `!clear`, `!ogloszenie`, `!sugestie`, `!gstart`, `!gend` ", inline=False)
+    embed.add_field(name="🎮 Gaming", value="`!lfg`, `!kalkulator`", inline=False)
     embed.add_field(name="💰 Ekonomia", value="`!bal`, `!praca`, `!daily` ", inline=False)
-    embed.add_field(name="🎲 Zabawa & Inne", value="`!moneta`, `!pirat`, `!ping`, `!ruletka`, `!strona`, `!avatar` [@user], `!memy` ", inline=False)
-    embed.set_footer(text="funnyboat.carrd.co")
+    embed.add_field(name="🎲 Zabawa & Inne", value="`!moneta`, `!pirat`, `!ping`, `!ruletka`, `!strona`, `!avatar`, `!memy` ", inline=False)
     await ctx.send(embed=embed)
 
 @bot.command()
@@ -248,34 +255,28 @@ async def ruletka(ctx): await ctx.send(random.choice(["💥 BOOM!", "🍀 Przeż
 @bot.command()
 async def ping(ctx): await ctx.send(f"🏓 Pong! `{round(bot.latency * 1000)}ms`")
 
-# --- NOWE KOMENDY ---
-
 @bot.command()
 async def kalkulator(ctx, *, rownanie):
-    """Oblicza proste działania: !kalkulator 2+2*2"""
     try:
         wynik = eval(rownanie, {"__builtins__": None}, {})
-        await ctx.send(f"🧮 Wynik działania `{rownanie}` to: **{wynik}**")
+        await ctx.send(f"🧮 Wynik: **{wynik}**")
     except:
-        await ctx.send("❌ Błędne działanie! Używaj tylko liczb i znaków: +, -, *, /")
+        await ctx.send("❌ Błędne działanie!")
 
 @bot.command()
 async def avatar(ctx, member: discord.Member = None):
-    """Pokazuje avatar użytkownika: !avatar [@osoba]"""
     member = member or ctx.author
-    embed = discord.Embed(title=f"🖼️ Avatar gracza {member.name}", color=0xbc13fe)
+    embed = discord.Embed(title=f"🖼️ Avatar {member.name}", color=0xbc13fe)
     embed.set_image(url=member.display_avatar.url)
     await ctx.send(embed=embed)
 
 @bot.command()
 async def memy(ctx):
-    """Wysyła losowy mem z Reddita"""
     async with aiohttp.ClientSession() as session:
-        async with session.get("https://meme-api.com/gimme/wholesomememes") as response:
+        async with session.get("https://meme-api.com/gimme") as response:
             data = await response.json()
             embed = discord.Embed(title=data['title'], color=0x00ffcc)
             embed.set_image(url=data['url'])
-            embed.set_footer(text=f"Źródło: r/{data['subreddit']}")
             await ctx.send(embed=embed)
 
 # --- 7. EVENTY ---
@@ -303,8 +304,7 @@ async def on_member_join(member):
     if data["welcome"]:
         ch = bot.get_channel(data["welcome"])
         if ch:
-            embed = discord.Embed(title="Witaj na pokładzie! ⚓", description=f"Ahoj {member.mention}! Cieszymy się, że z nami jesteś.", color=0x00ffcc)
-            embed.set_thumbnail(url=member.display_avatar.url)
+            embed = discord.Embed(title="Witaj na pokładzie! ⚓", description=f"Ahoj {member.mention}!", color=0x00ffcc)
             await ch.send(embed=embed)
 
 @bot.event
@@ -313,8 +313,7 @@ async def on_member_remove(member):
     if data["goodbye"]:
         ch = bot.get_channel(data["goodbye"])
         if ch:
-            embed = discord.Embed(title="Pirat odpłynął... 🚢", description=f"**{member.name}** opuścił naszą załogę. Pomyślnych wiatrów!", color=0xff4500)
-            embed.set_thumbnail(url=member.display_avatar.url)
+            embed = discord.Embed(title="Pirat odpłynął... 🚢", description=f"**{member.name}** opuścił nas.", color=0xff4500)
             await ch.send(embed=embed)
 
 @bot.event
@@ -327,6 +326,85 @@ async def on_message_delete(message):
         ch = bot.get_channel(data["logs"])
         if ch: await ch.send(f"🗑️ **Usunięta wiadomość:** {message.author.name}: {message.content}")
 
+# --- SYSTEM GIVEAWAY (POPRAWIONY) ---
+
+def parse_duration(duration_str):
+    time_units = {"s": 1, "m": 60, "g": 3600, "d": 86400, "t": 604800}
+    match = re.match(r"(\d+)([smgdt])", duration_str.lower())
+    if not match: return None
+    val, unit = match.groups()
+    return int(val) * time_units[unit]
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def gstart(ctx):
+    def check(m): return m.author == ctx.author and m.channel == ctx.channel
+    
+    await ctx.send("🕒 **Czas trwania?** (np. 10s, 5m, 1g):")
+    try:
+        msg = await bot.wait_for('message', check=check, timeout=60)
+        seconds = parse_duration(msg.content)
+        if seconds is None: return await ctx.send("❌ Błędny format!")
+    except asyncio.TimeoutError: return await ctx.send("⏰ Czas minął.")
+
+    await ctx.send("🎁 **Nagroda?**:")
+    msg = await bot.wait_for('message', check=check, timeout=60)
+    prize = msg.content
+
+    await ctx.send("👥 **Ilu zwycięzców?**:")
+    msg = await bot.wait_for('message', check=check, timeout=60)
+    try: winners_count = int(msg.content)
+    except: winners_count = 1
+
+    end_time = int(time.time() + seconds)
+    embed = discord.Embed(title="🎉 NOWY GIVEAWAY!", description=f"Nagroda: **{prize}**\n\nKoniec: <t:{end_time}:R>", color=0x00ff00)
+    embed.set_footer(text=f"Zwycięzcy: {winners_count}")
+    g_msg = await ctx.send(embed=embed)
+    await g_msg.add_reaction("🎉")
+
+    task = asyncio.create_task(run_giveaway(ctx, g_msg, seconds, prize, winners_count))
+    giveaway_tasks[ctx.guild.id] = {"task": task, "msg": g_msg}
+
+async def run_giveaway(ctx, g_msg, seconds, prize, winners_count):
+    try:
+        await asyncio.sleep(seconds)
+        
+        # Pobieramy aktualną wiadomość
+        msg = await ctx.channel.fetch_message(g_msg.id)
+        reaction = discord.utils.get(msg.reactions, emoji="🎉")
+        
+        # Pobieramy listę osób, które kliknęły 🎉
+        users = []
+        async for user in reaction.users():
+            if not user.bot:
+                users.append(user)
+        
+        if len(users) == 0:
+            await ctx.send(f"❌ Nikt nie wygrał **{prize}** (brak uczestników).")
+        else:
+            winners = random.sample(users, min(len(users), winners_count))
+            win_mentions = ", ".join([w.mention for w in winners])
+            await ctx.send(f"🎊 Gratulacje {win_mentions}! Wygraliście: **{prize}**!")
+        
+        # USUWANIE GIVEAWAY PO ZAKOŃCZENIU
+        try: await msg.delete()
+        except: pass
+            
+    except asyncio.CancelledError:
+        try: await g_msg.delete()
+        except: pass
+    finally:
+        giveaway_tasks.pop(ctx.guild.id, None)
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def gend(ctx):
+    if ctx.guild.id in giveaway_tasks:
+        info = giveaway_tasks[ctx.guild.id]
+        info["task"].cancel() 
+        await ctx.send("✅ Giveaway został usunięty!", delete_after=5)
+    else:
+        await ctx.send("❌ Nie ma aktywnego konkursu.")
+
 # --- URUCHOMIENIE ---
-token = os.environ.get('DISCORD_TOKEN')
 bot.run(token)
