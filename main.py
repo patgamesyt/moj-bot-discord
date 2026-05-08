@@ -8,8 +8,27 @@ import aiohttp
 import time
 import datetime
 import re
+from flask import Flask
+from threading import Thread
 
-# --- KONFIGURACJA ---
+# --- DODATEK DLA RENDER.COM (SERWER WWW) ---
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Funny Boat is Online!"
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
+# Uruchomienie udawacza strony www
+keep_alive()
+
+# --- TWOJA KONFIGURACJA ---
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True 
@@ -18,7 +37,7 @@ bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
 # Baza danych w pamięci
 serwery = {}
-# Przechowuje aktywne zadania konkursów, aby móc je anulować
+# Przechowuje aktywne zadania konkursów
 giveaway_tasks = {}
 
 def get_data(guild_id):
@@ -40,7 +59,6 @@ async def on_ready():
     print(f'🚢 Funny Boat jest gotowy! Zalogowano jako: {bot.user.name}')
 
 # --- 1. SYSTEM REGULAMINU ---
-
 class RegulaminView(View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -76,7 +94,6 @@ class RegulaminView(View):
             await interaction.followup.send("⏰ Timeout.", ephemeral=True)
 
 # --- 2. SYSTEM TICKETÓW ---
-
 class ConfirmCloseView(View):
     def __init__(self): super().__init__(timeout=None)
     @discord.ui.button(label="🗑️ Usuń Ticket", style=discord.ButtonStyle.danger)
@@ -95,7 +112,6 @@ class TicketView(View):
         await ch.send(embed=embed, view=ConfirmCloseView())
 
 # --- 3. SYSTEM LOGÓW ---
-
 class LogsView(View):
     def __init__(self, channel_id):
         super().__init__(timeout=60)
@@ -132,7 +148,6 @@ class LogsView(View):
         await interaction.response.edit_message(content=f"📡 Kanał logów ustawiony! Loguję wszystkich.", embed=None, view=None)
 
 # --- 4. KOMENDY ADMINISTRACYJNE ---
-
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def sugestie(ctx):
@@ -196,7 +211,6 @@ async def setup_tickets(ctx):
     await ctx.send(embed=discord.Embed(title="📩 Wsparcie", description="Kliknij przycisk, aby otworzyć ticket."), view=TicketView())
 
 # --- 5. SYSTEM LFG (SZUKANIE EKIPY) ---
-
 @bot.command()
 async def lfg(ctx, *, gra_i_opis):
     embed = discord.Embed(title="🎮 POSZUKIWANI GRACZE!", description=f"**Gra/Opis:** {gra_i_opis}", color=0x00ff00)
@@ -207,7 +221,6 @@ async def lfg(ctx, *, gra_i_opis):
     await msg.add_reaction("⚔️")
 
 # --- 6. EKONOMIA I ZABAWA ---
-
 class WebsiteView(discord.ui.View):
     def __init__(self):
         super().__init__()
@@ -280,7 +293,6 @@ async def memy(ctx):
             await ctx.send(embed=embed)
 
 # --- 7. EVENTY ---
-
 @bot.event
 async def on_message(message):
     if message.author.bot: return
@@ -326,8 +338,7 @@ async def on_message_delete(message):
         ch = bot.get_channel(data["logs"])
         if ch: await ch.send(f"🗑️ **Usunięta wiadomość:** {message.author.name}: {message.content}")
 
-# --- SYSTEM GIVEAWAY (POPRAWIONY) ---
-
+# --- SYSTEM GIVEAWAY ---
 def parse_duration(duration_str):
     time_units = {"s": 1, "m": 60, "g": 3600, "d": 86400, "t": 604800}
     match = re.match(r"(\d+)([smgdt])", duration_str.lower())
@@ -368,12 +379,9 @@ async def gstart(ctx):
 async def run_giveaway(ctx, g_msg, seconds, prize, winners_count):
     try:
         await asyncio.sleep(seconds)
-        
-        # Pobieramy aktualną wiadomość
         msg = await ctx.channel.fetch_message(g_msg.id)
         reaction = discord.utils.get(msg.reactions, emoji="🎉")
         
-        # Pobieramy listę osób, które kliknęły 🎉
         users = []
         async for user in reaction.users():
             if not user.bot:
@@ -386,7 +394,6 @@ async def run_giveaway(ctx, g_msg, seconds, prize, winners_count):
             win_mentions = ", ".join([w.mention for w in winners])
             await ctx.send(f"🎊 Gratulacje {win_mentions}! Wygraliście: **{prize}**!")
         
-        # USUWANIE GIVEAWAY PO ZAKOŃCZENIU
         try: await msg.delete()
         except: pass
             
@@ -406,5 +413,7 @@ async def gend(ctx):
     else:
         await ctx.send("❌ Nie ma aktywnego konkursu.")
 
-# --- URUCHOMIENIE ---
-bot.run(token)
+# --- URUCHOMIENIE (ZMIENIONO NA POBIERANIE TOKENU Z ENV) ---
+token = os.environ.get('DISCORD_TOKEN')
+if token:
+    bot.run(token)
