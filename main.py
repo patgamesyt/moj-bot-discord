@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 from discord.ui import Button, View
+from discord import app_commands # Dodane dla komend slash
 import os
 import random
 import asyncio
@@ -8,27 +9,8 @@ import aiohttp
 import time
 import datetime
 import re
-from flask import Flask
-from threading import Thread
 
-# --- DODATEK DLA RENDER.COM (SERWER WWW) ---
-app = Flask('')
-
-@app.route('/')
-def home():
-    return "Funny Boat is Online!"
-
-def run():
-    app.run(host='0.0.0.0', port=8080)
-
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
-
-# Uruchomienie udawacza strony www
-keep_alive()
-
-# --- TWOJA KONFIGURACJA ---
+# --- KONFIGURACJA ---
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True 
@@ -37,7 +19,6 @@ bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
 # Baza danych w pamięci
 serwery = {}
-# Przechowuje aktywne zadania konkursów
 giveaway_tasks = {}
 
 def get_data(guild_id):
@@ -57,8 +38,34 @@ def get_data(guild_id):
 async def on_ready():
     await bot.change_presence(activity=discord.Game(name="!pomoc | funnyboat.carrd.co"))
     print(f'🚢 Funny Boat jest gotowy! Zalogowano jako: {bot.user.name}')
+    # Rejestracja komend slash
+    try:
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} command(s)")
+    except Exception as e:
+        print(e)
+
+# --- KOMENDA SLASH DLA ODZNAKI ---
+
+@bot.tree.command(name="kalkulator", description="Oblicz działanie matematyczne")
+@app_commands.describe(rownanie="Wpisz działanie, np. 2+2")
+async def kalkulator_slash(interaction: discord.Interaction, rownanie: str):
+    try:
+        # Używamy prostego eval z zabezpieczeniem (podobnie jak w oryginale)
+        wynik = eval(rownanie, {"__builtins__": None}, {})
+        await interaction.response.send_message(f"🧮 Wynik: **{wynik}**")
+    except:
+        await interaction.response.send_message("❌ Błędne działanie!", ephemeral=True)
+
+# Komenda pomocnicza do ręcznej synchronizacji (wpisz !sync na Discordzie)
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def sync(ctx):
+    await bot.tree.sync()
+    await ctx.send("✅ Komendy Slash zostały zsynchronizowane!")
 
 # --- 1. SYSTEM REGULAMINU ---
+
 class RegulaminView(View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -94,6 +101,7 @@ class RegulaminView(View):
             await interaction.followup.send("⏰ Timeout.", ephemeral=True)
 
 # --- 2. SYSTEM TICKETÓW ---
+
 class ConfirmCloseView(View):
     def __init__(self): super().__init__(timeout=None)
     @discord.ui.button(label="🗑️ Usuń Ticket", style=discord.ButtonStyle.danger)
@@ -112,6 +120,7 @@ class TicketView(View):
         await ch.send(embed=embed, view=ConfirmCloseView())
 
 # --- 3. SYSTEM LOGÓW ---
+
 class LogsView(View):
     def __init__(self, channel_id):
         super().__init__(timeout=60)
@@ -148,6 +157,7 @@ class LogsView(View):
         await interaction.response.edit_message(content=f"📡 Kanał logów ustawiony! Loguję wszystkich.", embed=None, view=None)
 
 # --- 4. KOMENDY ADMINISTRACYJNE ---
+
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def sugestie(ctx):
@@ -211,6 +221,7 @@ async def setup_tickets(ctx):
     await ctx.send(embed=discord.Embed(title="📩 Wsparcie", description="Kliknij przycisk, aby otworzyć ticket."), view=TicketView())
 
 # --- 5. SYSTEM LFG (SZUKANIE EKIPY) ---
+
 @bot.command()
 async def lfg(ctx, *, gra_i_opis):
     embed = discord.Embed(title="🎮 POSZUKIWANI GRACZE!", description=f"**Gra/Opis:** {gra_i_opis}", color=0x00ff00)
@@ -221,6 +232,7 @@ async def lfg(ctx, *, gra_i_opis):
     await msg.add_reaction("⚔️")
 
 # --- 6. EKONOMIA I ZABAWA ---
+
 class WebsiteView(discord.ui.View):
     def __init__(self):
         super().__init__()
@@ -230,7 +242,7 @@ class WebsiteView(discord.ui.View):
 async def pomoc(ctx):
     embed = discord.Embed(title="⚓ Panel Komend Funny Boat", color=0xbc13fe)
     embed.add_field(name="⚙️ Administracja", value="`!welcome`, `!goodbye`, `!logs`, `!regulamin`, `!setup_tickets`, `!clear`, `!ogloszenie`, `!sugestie`, `!gstart`, `!gend` ", inline=False)
-    embed.add_field(name="🎮 Gaming", value="`!lfg`, `!kalkulator`", inline=False)
+    embed.add_field(name="🎮 Gaming", value="`!lfg`, `/kalkulator`", inline=False) # Zmienione w opisie
     embed.add_field(name="💰 Ekonomia", value="`!bal`, `!praca`, `!daily` ", inline=False)
     embed.add_field(name="🎲 Zabawa & Inne", value="`!moneta`, `!pirat`, `!ping`, `!ruletka`, `!strona`, `!avatar`, `!memy` ", inline=False)
     await ctx.send(embed=embed)
@@ -269,14 +281,6 @@ async def ruletka(ctx): await ctx.send(random.choice(["💥 BOOM!", "🍀 Przeż
 async def ping(ctx): await ctx.send(f"🏓 Pong! `{round(bot.latency * 1000)}ms`")
 
 @bot.command()
-async def kalkulator(ctx, *, rownanie):
-    try:
-        wynik = eval(rownanie, {"__builtins__": None}, {})
-        await ctx.send(f"🧮 Wynik: **{wynik}**")
-    except:
-        await ctx.send("❌ Błędne działanie!")
-
-@bot.command()
 async def avatar(ctx, member: discord.Member = None):
     member = member or ctx.author
     embed = discord.Embed(title=f"🖼️ Avatar {member.name}", color=0xbc13fe)
@@ -293,6 +297,7 @@ async def memy(ctx):
             await ctx.send(embed=embed)
 
 # --- 7. EVENTY ---
+
 @bot.event
 async def on_message(message):
     if message.author.bot: return
@@ -339,6 +344,7 @@ async def on_message_delete(message):
         if ch: await ch.send(f"🗑️ **Usunięta wiadomość:** {message.author.name}: {message.content}")
 
 # --- SYSTEM GIVEAWAY ---
+
 def parse_duration(duration_str):
     time_units = {"s": 1, "m": 60, "g": 3600, "d": 86400, "t": 604800}
     match = re.match(r"(\d+)([smgdt])", duration_str.lower())
@@ -413,7 +419,5 @@ async def gend(ctx):
     else:
         await ctx.send("❌ Nie ma aktywnego konkursu.")
 
-# --- URUCHOMIENIE (ZMIENIONO NA POBIERANIE TOKENU Z ENV) ---
-token = os.environ.get('DISCORD_TOKEN')
-if token:
-    bot.run(token)
+# --- URUCHOMIENIE ---
+bot.run("TOKEN")
