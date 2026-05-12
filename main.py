@@ -1,7 +1,6 @@
 import discord
 from discord.ext import commands
 from discord.ui import Button, View
-from discord import app_commands # Niezbędne do komend slash
 import os
 import random
 import asyncio
@@ -39,33 +38,8 @@ def get_data(guild_id):
 async def on_ready():
     await bot.change_presence(activity=discord.Game(name="!pomoc | funnyboat.carrd.co"))
     print(f'🚢 Funny Boat jest gotowy! Zalogowano jako: {bot.user.name}')
-    # Rejestracja komend slash przy starcie
-    try:
-        synced = await bot.tree.sync()
-        print(f"Zsynchronizowano {len(synced)} komend slash.")
-    except Exception as e:
-        print(f"Błąd synchronizacji: {e}")
 
-# --- NOWA KOMENDA SLASH DLA ODZNAKI ---
-
-@bot.tree.command(name="kalkulator", description="Oblicz działanie matematyczne")
-@app_commands.describe(rownanie="Wpisz działanie (np. 2+2)")
-async def kalkulator_slash(interaction: discord.Interaction, rownanie: str):
-    try:
-        # Identyczna logika co w Twoim starym kodzie
-        wynik = eval(rownanie, {"__builtins__": None}, {})
-        await interaction.response.send_message(f"🧮 Wynik: **{wynik}**")
-    except:
-        await interaction.response.send_message("❌ Błędne działanie!", ephemeral=True)
-
-# Dodatkowa komenda admina, gdyby slash się nie pojawił od razu
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def sync(ctx):
-    await bot.tree.sync()
-    await ctx.send("✅ Komendy Slash zostały odświeżone!")
-
-# --- 1. SYSTEM REGULAMINU (Bez zmian) ---
+# --- 1. SYSTEM REGULAMINU ---
 
 class RegulaminView(View):
     def __init__(self):
@@ -101,7 +75,7 @@ class RegulaminView(View):
         except asyncio.TimeoutError:
             await interaction.followup.send("⏰ Timeout.", ephemeral=True)
 
-# --- 2. SYSTEM TICKETÓW (Bez zmian) ---
+# --- 2. SYSTEM TICKETÓW ---
 
 class ConfirmCloseView(View):
     def __init__(self): super().__init__(timeout=None)
@@ -120,7 +94,7 @@ class TicketView(View):
         embed = discord.Embed(title="⚓ Nowy Ticket", description="Opisz swój problem. Moderator zaraz się Tobą zajmie.", color=0x00ffcc)
         await ch.send(embed=embed, view=ConfirmCloseView())
 
-# --- 3. SYSTEM LOGÓW (Bez zmian) ---
+# --- 3. SYSTEM LOGÓW ---
 
 class LogsView(View):
     def __init__(self, channel_id):
@@ -157,7 +131,7 @@ class LogsView(View):
         data["ignored_users"] = [] 
         await interaction.response.edit_message(content=f"📡 Kanał logów ustawiony! Loguję wszystkich.", embed=None, view=None)
 
-# --- 4. KOMENDY ADMINISTRACYJNE (Bez zmian) ---
+# --- 4. KOMENDY ADMINISTRACYJNE ---
 
 @bot.command()
 @commands.has_permissions(administrator=True)
@@ -221,7 +195,7 @@ async def regulamin(ctx):
 async def setup_tickets(ctx):
     await ctx.send(embed=discord.Embed(title="📩 Wsparcie", description="Kliknij przycisk, aby otworzyć ticket."), view=TicketView())
 
-# --- 5. SYSTEM LFG (SZUKANIE EKIPY - Bez zmian) ---
+# --- 5. SYSTEM LFG (SZUKANIE EKIPY) ---
 
 @bot.command()
 async def lfg(ctx, *, gra_i_opis):
@@ -232,7 +206,7 @@ async def lfg(ctx, *, gra_i_opis):
     msg = await ctx.send(content="@here", embed=embed)
     await msg.add_reaction("⚔️")
 
-# --- 6. EKONOMIA I ZABAWA (Bez zmian) ---
+# --- 6. EKONOMIA I ZABAWA ---
 
 class WebsiteView(discord.ui.View):
     def __init__(self):
@@ -243,7 +217,7 @@ class WebsiteView(discord.ui.View):
 async def pomoc(ctx):
     embed = discord.Embed(title="⚓ Panel Komend Funny Boat", color=0xbc13fe)
     embed.add_field(name="⚙️ Administracja", value="`!welcome`, `!goodbye`, `!logs`, `!regulamin`, `!setup_tickets`, `!clear`, `!ogloszenie`, `!sugestie`, `!gstart`, `!gend` ", inline=False)
-    embed.add_field(name="🎮 Gaming", value="`!lfg`, `/kalkulator`", inline=False)
+    embed.add_field(name="🎮 Gaming", value="`!lfg`, `!kalkulator`", inline=False)
     embed.add_field(name="💰 Ekonomia", value="`!bal`, `!praca`, `!daily` ", inline=False)
     embed.add_field(name="🎲 Zabawa & Inne", value="`!moneta`, `!pirat`, `!ping`, `!ruletka`, `!strona`, `!avatar`, `!memy` ", inline=False)
     await ctx.send(embed=embed)
@@ -282,6 +256,14 @@ async def ruletka(ctx): await ctx.send(random.choice(["💥 BOOM!", "🍀 Przeż
 async def ping(ctx): await ctx.send(f"🏓 Pong! `{round(bot.latency * 1000)}ms`")
 
 @bot.command()
+async def kalkulator(ctx, *, rownanie):
+    try:
+        wynik = eval(rownanie, {"__builtins__": None}, {})
+        await ctx.send(f"🧮 Wynik: **{wynik}**")
+    except:
+        await ctx.send("❌ Błędne działanie!")
+
+@bot.command()
 async def avatar(ctx, member: discord.Member = None):
     member = member or ctx.author
     embed = discord.Embed(title=f"🖼️ Avatar {member.name}", color=0xbc13fe)
@@ -297,7 +279,7 @@ async def memy(ctx):
             embed.set_image(url=data['url'])
             await ctx.send(embed=embed)
 
-# --- 7. EVENTY (Bez zmian) ---
+# --- 7. EVENTY ---
 
 @bot.event
 async def on_message(message):
@@ -344,7 +326,7 @@ async def on_message_delete(message):
         ch = bot.get_channel(data["logs"])
         if ch: await ch.send(f"🗑️ **Usunięta wiadomość:** {message.author.name}: {message.content}")
 
-# --- SYSTEM GIVEAWAY (Bez zmian) ---
+# --- SYSTEM GIVEAWAY (POPRAWIONY) ---
 
 def parse_duration(duration_str):
     time_units = {"s": 1, "m": 60, "g": 3600, "d": 86400, "t": 604800}
@@ -386,9 +368,12 @@ async def gstart(ctx):
 async def run_giveaway(ctx, g_msg, seconds, prize, winners_count):
     try:
         await asyncio.sleep(seconds)
+        
+        # Pobieramy aktualną wiadomość
         msg = await ctx.channel.fetch_message(g_msg.id)
         reaction = discord.utils.get(msg.reactions, emoji="🎉")
         
+        # Pobieramy listę osób, które kliknęły 🎉
         users = []
         async for user in reaction.users():
             if not user.bot:
@@ -401,6 +386,7 @@ async def run_giveaway(ctx, g_msg, seconds, prize, winners_count):
             win_mentions = ", ".join([w.mention for w in winners])
             await ctx.send(f"🎊 Gratulacje {win_mentions}! Wygraliście: **{prize}**!")
         
+        # USUWANIE GIVEAWAY PO ZAKOŃCZENIU
         try: await msg.delete()
         except: pass
             
@@ -421,4 +407,4 @@ async def gend(ctx):
         await ctx.send("❌ Nie ma aktywnego konkursu.")
 
 # --- URUCHOMIENIE ---
-bot.run("TWÓJ_TOKEN_TUTAJ")
+bot.run("token")
